@@ -19,9 +19,9 @@
 
                 {{-- Langkah status --}}
                 @php
-                    $steps = ['pending' => 'Dipesan', 'preparing' => 'Disiapkan', 'ready' => 'Siap', 'served' => 'Disajikan'];
-                    $currentIdx = array_search($order->status, array_keys($steps));
-                    $isCancelled = $order->status === 'cancelled';
+                    $steps = \App\Enums\OrderStatus::flow();
+                    $currentIdx = array_search($order->status, $steps, true);
+                    $isCancelled = $order->status === \App\Enums\OrderStatus::Cancelled;
                 @endphp
 
                 @if ($isCancelled)
@@ -33,7 +33,7 @@
                     </div>
                 @else
                     <ol class="mt-5 space-y-0">
-                        @foreach ($steps as $key => $label)
+                        @foreach ($steps as $step)
                             @php $idx = $loop->index; @endphp
                             <li class="flex items-start gap-3 pb-4 last:pb-0">
                                 <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold
@@ -41,7 +41,7 @@
                                     {{ $idx < $currentIdx ? '✓' : $idx + 1 }}
                                 </span>
                                 <span class="pt-1 text-base {{ $idx === $currentIdx ? 'font-bold text-stone-900' : ($idx < $currentIdx ? 'text-stone-600' : 'text-stone-400') }}">
-                                    {{ $label }}
+                                    {{ $step->label() }}
                                     @if ($idx === $currentIdx)
                                         <span class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">sedang berlangsung</span>
                                     @endif
@@ -68,22 +68,22 @@
 
                 {{-- Status bayar + tombol bayar --}}
                 <div class="mt-4 rounded-xl px-4 py-3 text-center
-                    {{ $order->payment_status === 'paid' ? 'bg-green-50 text-green-800' : ($order->payment_status === 'waiting' ? 'bg-yellow-50 text-yellow-800' : 'bg-stone-100 text-stone-700') }}">
-                    @if ($order->payment_status === 'paid')
+                    {{ $order->payment_status === \App\Enums\PaymentStatus::Paid ? 'bg-green-50 text-green-800' : ($order->payment_status === \App\Enums\PaymentStatus::Waiting ? 'bg-yellow-50 text-yellow-800' : 'bg-stone-100 text-stone-700') }}">
+                    @if ($order->payment_status === \App\Enums\PaymentStatus::Paid)
                         <p class="font-bold">✓ Lunas — terima kasih!</p>
-                        <p class="text-sm">{{ $order->payment_method === 'midtrans' ? 'Dibayar lewat ' . ($order->midtrans_payment_type ?? 'payment gateway') : 'Dibayar di kasir (' . $order->payment_method . ')' }}</p>
-                    @elseif ($order->payment_status === 'waiting')
+                        <p class="text-sm">{{ $order->payment_method?->isGateway() ? 'Dibayar lewat ' . ($order->midtrans_payment_type ?? 'payment gateway') : 'Dibayar di kasir (' . ($order->payment_method?->label() ?? '—') . ')' }}</p>
+                    @elseif ($order->payment_status === \App\Enums\PaymentStatus::Waiting)
                         <p class="font-bold">Menunggu konfirmasi pembayaran…</p>
                         <p class="text-sm">Jika sudah bayar, status akan berubah otomatis. Kalau belum, silakan ulangi pembayaran.</p>
                     @else
                         <p class="font-bold">Belum bayar — {{ rupiah($order->total) }}</p>
-                        @if ($gatewayConfigured)
+                        @if ($activeGateway)
                             <button wire:click="startPayment" wire:loading.attr="disabled"
                                 class="mt-3 w-full rounded-xl bg-emerald-600 py-3 text-base font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
                                 <span wire:loading.remove>Bayar Sekarang</span>
                                 <span wire:loading>Menyiapkan pembayaran…</span>
                             </button>
-                            <p class="mt-2 text-xs">QRIS, virtual account, atau e-wallet — lewat Midtrans.</p>
+                            <p class="mt-2 text-xs">QRIS, virtual account, atau e-wallet — lewat {{ $activeGateway->label() }}.</p>
                         @else
                             <p class="mt-2 text-sm">Silakan bayar di kasir (tunai / QRIS) dengan menunjukkan nomor pesanan ini.</p>
                         @endif
@@ -104,14 +104,24 @@
         @foreach ($categories as $category)
             @if ($category->menuItems->isNotEmpty())
                 <h2 class="mb-2 mt-6 text-lg font-bold text-stone-800 first:mt-0">{{ $category->name }}</h2>
-                <div class="space-y-3">
+                <div class="{{ ($settings->menu_layout ?? 'grid') === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-3' }}">
                     @foreach ($category->menuItems as $item)
-                        @php $inCart = $cart[$item->id]['qty'] ?? 0; @endphp
+                        @php
+                            $inCart = $cart[$item->id]['qty'] ?? 0;
+                            $showImage = $item->showsImage($settings) && $item->image_url;
+                            $showDescription = $item->showsDescription($settings);
+                        @endphp
                         <div class="rounded-2xl bg-white p-4 shadow-sm {{ $item->is_available ? '' : 'opacity-60' }}">
+                            @if ($showImage)
+                                <img src="{{ $item->image_url }}" alt="{{ $item->name }}" class="mb-3 h-32 w-full rounded-xl object-cover">
+                            @endif
+                            @if ($item->badge)
+                                <span class="mb-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">{{ $item->badge }}</span>
+                            @endif
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0">
                                     <h3 class="text-base font-bold">{{ $item->name }}</h3>
-                                    @if ($item->description)
+                                    @if ($showDescription && $item->description)
                                         <p class="mt-0.5 text-sm text-stone-500">{{ $item->description }}</p>
                                     @endif
                                     <p class="mt-1 text-base font-bold text-amber-700">{{ rupiah($item->price) }}</p>
@@ -199,7 +209,7 @@
         @endif
     @endif
 
-    @if ($gatewayConfigured)
+    @if ($activeGateway === \App\Enums\GatewayProvider::Midtrans)
         <script src="{{ \App\Services\MidtransService::snapJsUrl() }}" data-client-key="{{ \App\Services\MidtransService::clientKey() }}"></script>
         <script>
             // Setelah popup Snap ditutup/berhasil, muat ulang halaman supaya

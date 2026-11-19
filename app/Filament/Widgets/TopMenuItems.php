@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\OrderStatus;
 use App\Models\OrderItem;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -20,7 +21,7 @@ class TopMenuItems extends BaseWidget
             ->query(
                 OrderItem::query()
                     ->selectRaw('menu_item_id as id, name, SUM(qty) as total_qty, SUM(subtotal) as total_sales')
-                    ->whereHas('order', fn (Builder $q) => $q->where('status', '!=', 'cancelled'))
+                    ->whereHas('order', fn (Builder $q) => $q->where('status', '!=', OrderStatus::Cancelled))
                     ->groupBy('menu_item_id', 'name')
                     ->orderByDesc('total_qty')
             )

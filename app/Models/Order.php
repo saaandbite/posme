@@ -2,57 +2,40 @@
 
 namespace App\Models;
 
+use App\Enums\OrderStatus;
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\DB;
 
 class Order extends Model
 {
-    public const STATUS_PENDING = 'pending';
-    public const STATUS_PREPARING = 'preparing';
-    public const STATUS_READY = 'ready';
-    public const STATUS_SERVED = 'served';
-    public const STATUS_CANCELLED = 'cancelled';
-
-    public const STATUSES = [
-        self::STATUS_PENDING => 'Dipesan',
-        self::STATUS_PREPARING => 'Disiapkan',
-        self::STATUS_READY => 'Siap',
-        self::STATUS_SERVED => 'Disajikan',
-        self::STATUS_CANCELLED => 'Dibatalkan',
-    ];
-
-    /** Urutan alur status dapur. */
-    public const FLOW = [
-        self::STATUS_PENDING,
-        self::STATUS_PREPARING,
-        self::STATUS_READY,
-        self::STATUS_SERVED,
-    ];
-
-    public const PAYMENT_UNPAID = 'unpaid';
-    public const PAYMENT_WAITING = 'waiting';
-    public const PAYMENT_PAID = 'paid';
-
     protected $fillable = [
         'dining_table_id', 'order_number', 'status', 'payment_status',
         'payment_method', 'midtrans_payment_type', 'snap_token',
+        'xendit_invoice_id',
         'subtotal', 'tax_amount', 'service_amount', 'total',
         'paid_amount', 'change_amount', 'customer_note',
         'cancelled_reason', 'paid_at', 'served_at',
     ];
 
-    protected $casts = [
-        'subtotal' => 'integer',
-        'tax_amount' => 'integer',
-        'service_amount' => 'integer',
-        'total' => 'integer',
-        'paid_amount' => 'integer',
-        'change_amount' => 'integer',
-        'paid_at' => 'datetime',
-        'served_at' => 'datetime',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'status' => OrderStatus::class,
+            'payment_status' => PaymentStatus::class,
+            'payment_method' => PaymentMethod::class,
+            'subtotal' => 'integer',
+            'tax_amount' => 'integer',
+            'service_amount' => 'integer',
+            'total' => 'integer',
+            'paid_amount' => 'integer',
+            'change_amount' => 'integer',
+            'paid_at' => 'datetime',
+            'served_at' => 'datetime',
+        ];
+    }
 
     public function diningTable(): BelongsTo
     {
@@ -104,30 +87,24 @@ class Order extends Model
 
     public function isActive(): bool
     {
-        return ! in_array($this->status, [self::STATUS_SERVED, self::STATUS_CANCELLED], true);
+        return $this->status->isActive();
     }
 
     public function canBePaid(): bool
     {
-        return $this->status !== self::STATUS_CANCELLED
-            && $this->payment_status !== self::PAYMENT_PAID;
+        return $this->status !== OrderStatus::Cancelled
+            && $this->payment_status !== PaymentStatus::Paid;
     }
 
     public function canBeCancelled(): bool
     {
-        return $this->status !== self::STATUS_CANCELLED
-            && $this->payment_status !== self::PAYMENT_PAID;
+        return $this->status !== OrderStatus::Cancelled
+            && $this->payment_status !== PaymentStatus::Paid;
     }
 
-    public function nextStatus(): ?string
+    public function nextStatus(): ?OrderStatus
     {
-        $idx = array_search($this->status, self::FLOW, true);
-
-        if ($idx === false || $idx >= count(self::FLOW) - 1) {
-            return null;
-        }
-
-        return self::FLOW[$idx + 1];
+        return $this->status->next();
     }
 
     /** Majukan status satu langkah (dipakai dapur & kasir/waiter). */
@@ -141,7 +118,7 @@ class Order extends Model
 
         $this->update(['status' => $next]);
 
-        if ($next === self::STATUS_SERVED) {
+        if ($next === OrderStatus::Served) {
             $this->update(['served_at' => now()]);
         }
 
@@ -149,10 +126,10 @@ class Order extends Model
     }
 
     /** Tandai lunas lewat pembayaran manual kasir (tunai/QRIS). */
-    public function markPaidManually(string $method, int $paidAmount, ?int $userId = null): void
+    public function markPaidManually(PaymentMethod $method, int $paidAmount, ?int $userId = null): void
     {
         $this->update([
-            'payment_status' => self::PAYMENT_PAID,
+            'payment_status' => PaymentStatus::Paid,
             'payment_method' => $method,
             'paid_amount' => $paidAmount,
             'change_amount' => max(0, $paidAmount - $this->total),
@@ -162,7 +139,7 @@ class Order extends Model
 
     public function scopeActive($query)
     {
-        return $query->whereNotIn('status', [self::STATUS_SERVED, self::STATUS_CANCELLED]);
+        return $query->whereNotIn('status', [OrderStatus::Served, OrderStatus::Cancelled]);
     }
 
     public function scopeToday($query)

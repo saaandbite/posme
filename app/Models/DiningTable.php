@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OrderStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
@@ -10,9 +11,12 @@ class DiningTable extends Model
 {
     protected $fillable = ['name', 'code', 'is_active'];
 
-    protected $casts = [
-        'is_active' => 'boolean',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+        ];
+    }
 
     protected static function booted(): void
     {
@@ -38,6 +42,6 @@ class DiningTable extends Model
     /** Order aktif di meja ini (belum disajikan dan belum dibatalkan). */
     public function activeOrders(): HasMany
     {
-        return $this->orders()->whereNotIn('status', ['served', 'cancelled']);
+        return $this->orders()->whereNotIn('status', [OrderStatus::Served, OrderStatus::Cancelled]);
     }
 }

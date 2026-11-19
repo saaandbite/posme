@@ -2,9 +2,13 @@
 
 namespace App\Livewire;
 
+use App\Enums\OrderStatus;
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus;
 use App\Models\Order;
 use App\Models\Setting;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Validate;
 use Livewire\Component;
 
 /**
@@ -19,10 +23,13 @@ class CashierTerminal extends Component
 
     public ?int $selectedOrderId = null;
 
+    #[Validate('required|string|in:cash,qris')]
     public string $paymentMethod = 'cash';
 
+    #[Validate('required_if:paymentMethod,cash|nullable|integer|min:0', message: 'Masukkan uang yang diterima.')]
     public ?int $cashReceived = null;
 
+    #[Validate('required|string|max:200', message: 'Alasan pembatalan wajib diisi.')]
     public string $cancelReason = '';
 
     public bool $showCancelForm = false;
@@ -43,7 +50,7 @@ class CashierTerminal extends Component
     public function markServed(int $orderId): void
     {
         $order = Order::find($orderId);
-        if (! $order || $order->status !== Order::STATUS_READY) {
+        if (! $order || $order->status !== OrderStatus::Ready) {
             return;
         }
 
@@ -55,10 +62,10 @@ class CashierTerminal extends Component
     {
         return Order::with(['items', 'diningTable'])
             ->today()
-            ->whereNotIn('status', [Order::STATUS_CANCELLED])
+            ->whereNotIn('status', [OrderStatus::Cancelled])
             ->where(function ($q) {
-                $q->where('status', '!=', Order::STATUS_SERVED)
-                    ->orWhere('payment_status', '!=', Order::PAYMENT_PAID);
+                $q->where('status', '!=', OrderStatus::Served)
+                    ->orWhere('payment_status', '!=', PaymentStatus::Paid);
             })
             ->orderByDesc('created_at')
             ->get();
@@ -104,12 +111,14 @@ class CashierTerminal extends Component
             $allowed[] = 'qris';
         }
 
-        $this->validate([
-            'paymentMethod' => ['required', 'in:'.implode(',', $allowed)],
-            'cashReceived' => ['required_if:paymentMethod,cash', 'nullable', 'integer', 'min:0'],
-        ], [
-            'cashReceived.required_if' => 'Masukkan uang yang diterima.',
-        ]);
+        $this->validateOnly('paymentMethod');
+        $this->validateOnly('cashReceived');
+
+        if (! in_array($this->paymentMethod, $allowed, true)) {
+            $this->addError('payment', 'Metode pembayaran ini tidak diaktifkan di Pengaturan.');
+
+            return;
+        }
 
         if ($this->paymentMethod === 'cash' && $this->cashReceived < $order->total) {
             $this->addError('payment', 'Uang diterima kurang dari total ('.rupiah($order->total).').');
@@ -119,7 +128,7 @@ class CashierTerminal extends Component
 
         $paidAmount = $this->paymentMethod === 'cash' ? (int) $this->cashReceived : $order->total;
 
-        $order->markPaidManually($this->paymentMethod, $paidAmount, auth()->id());
+        $order->markPaidManually(PaymentMethod::from($this->paymentMethod), $paidAmount, auth()->id());
         $this->lastPaidOrderId = $order->id;
         $this->cashReceived = null;
     }
@@ -134,14 +143,10 @@ class CashierTerminal extends Component
             return;
         }
 
-        $this->validate([
-            'cancelReason' => ['required', 'string', 'max:200'],
-        ], [
-            'cancelReason.required' => 'Alasan pembatalan wajib diisi.',
-        ]);
+        $this->validateOnly('cancelReason');
 
         $order->update([
-            'status' => Order::STATUS_CANCELLED,
+            'status' => OrderStatus::Cancelled,
             'cancelled_reason' => $this->cancelReason,
         ]);
 
@@ -155,8 +160,8 @@ class CashierTerminal extends Component
         return Order::with(['items', 'diningTable'])
             ->today()
             ->where(function ($q) {
-                $q->where('payment_status', Order::PAYMENT_PAID)
-                    ->orWhere('status', Order::STATUS_CANCELLED);
+                $q->where('payment_status', PaymentStatus::Paid)
+                    ->orWhere('status', OrderStatus::Cancelled);
             })
             ->orderByDesc('updated_at')
             ->limit(50)

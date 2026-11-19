@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus;
 use App\Models\Order;
 use App\Services\MidtransService;
 use Illuminate\Http\JsonResponse;
@@ -38,7 +40,7 @@ class MidtransWebhookController extends Controller
         }
 
         // Jangan proses ulang order yang sudah lunas.
-        if ($order->payment_status === Order::PAYMENT_PAID) {
+        if ($order->payment_status === PaymentStatus::Paid) {
             return response()->json(['message' => 'Sudah lunas.']);
         }
 
@@ -48,9 +50,9 @@ class MidtransWebhookController extends Controller
         match ($transactionStatus) {
             'capture' => $this->handleCapture($order, $fraudStatus, $payload),
             'settlement' => $this->markPaid($order, $payload),
-            'pending' => $order->update(['payment_status' => Order::PAYMENT_WAITING]),
+            'pending' => $order->update(['payment_status' => PaymentStatus::Waiting]),
             'deny', 'cancel', 'expire', 'failure' => $order->update([
-                'payment_status' => Order::PAYMENT_UNPAID,
+                'payment_status' => PaymentStatus::Unpaid,
                 'snap_token' => null,
             ]),
             default => null,
@@ -71,15 +73,15 @@ class MidtransWebhookController extends Controller
         if ($fraudStatus === 'accept') {
             $this->markPaid($order, $payload);
         } elseif ($fraudStatus === 'challenge') {
-            $order->update(['payment_status' => Order::PAYMENT_WAITING]);
+            $order->update(['payment_status' => PaymentStatus::Waiting]);
         }
     }
 
     protected function markPaid(Order $order, array $payload): void
     {
         $order->update([
-            'payment_status' => Order::PAYMENT_PAID,
-            'payment_method' => 'midtrans',
+            'payment_status' => PaymentStatus::Paid,
+            'payment_method' => PaymentMethod::Midtrans,
             'midtrans_payment_type' => $payload['payment_type'] ?? null,
             'paid_amount' => (int) ($payload['gross_amount'] ?? $order->total),
             'change_amount' => 0,

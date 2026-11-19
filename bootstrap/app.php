@@ -13,11 +13,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Webhook Midtrans tidak membawa CSRF token (server-to-server),
-        // jadi dikecualikan — tapi signature_key Midtrans WAJIB diverifikasi
-        // di controller sebelum status order apa pun diubah.
+        // Webhook Midtrans & Xendit tidak membawa CSRF token (server-to-server),
+        // jadi dikecualikan — tapi signature_key Midtrans / x-callback-token
+        // Xendit WAJIB diverifikasi di controller sebelum status order apa
+        // pun diubah.
         $middleware->validateCsrfTokens(except: [
             'midtrans/notification',
+            'xendit/notification',
         ]);
 
         $middleware->alias([

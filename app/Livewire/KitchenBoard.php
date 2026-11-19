@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Enums\OrderStatus;
 use App\Models\Order;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
@@ -15,7 +16,7 @@ class KitchenBoard extends Component
     public function advanceOrder(int $orderId): void
     {
         $order = Order::find($orderId);
-        if (! $order || $order->status === Order::STATUS_CANCELLED) {
+        if (! $order || $order->status === OrderStatus::Cancelled) {
             return;
         }
 

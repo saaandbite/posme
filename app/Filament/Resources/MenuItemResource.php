@@ -58,12 +58,38 @@ class MenuItemResource extends Resource
                     ->label('Urutan tampil')
                     ->numeric()
                     ->default(0),
+                Forms\Components\Section::make('Tampilan di menu customer')
+                    ->description('Kosongkan (default) untuk mengikuti pengaturan global di halaman Pengaturan → Tampilan Menu.')
+                    ->schema([
+                        Forms\Components\Select::make('show_image')
+                            ->label('Tampilkan foto')
+                            ->options([
+                                '1' => 'Ya',
+                                '0' => 'Tidak',
+                            ])
+                            ->placeholder('Ikuti default global')
+                            ->native(false),
+                        Forms\Components\Select::make('show_description')
+                            ->label('Tampilkan deskripsi')
+                            ->options([
+                                '1' => 'Ya',
+                                '0' => 'Tidak',
+                            ])
+                            ->placeholder('Ikuti default global')
+                            ->native(false),
+                        Forms\Components\TextInput::make('badge')
+                            ->label('Badge / label')
+                            ->placeholder('mis. Baru, Best Seller, Pedas')
+                            ->maxLength(30),
+                    ])
+                    ->columns(3),
             ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
+            ->reorderable('sort_order')
             ->columns([
                 Tables\Columns\ImageColumn::make('image')
                     ->label('Foto')
@@ -74,6 +100,10 @@ class MenuItemResource extends Resource
                 Tables\Columns\TextColumn::make('name')
                     ->label('Nama')
                     ->searchable(),
+                Tables\Columns\TextColumn::make('badge')
+                    ->label('Badge')
+                    ->badge()
+                    ->placeholder('—'),
                 Tables\Columns\TextColumn::make('price')
                     ->label('Harga')
                     ->money('IDR')
@@ -85,7 +115,7 @@ class MenuItemResource extends Resource
                     ->label('Aktif')
                     ->boolean(),
             ])
-            ->defaultSort('category_id')
+            ->defaultSort('sort_order')
             ->filters([
                 Tables\Filters\SelectFilter::make('category_id')
                     ->label('Kategori')

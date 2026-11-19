@@ -22,7 +22,7 @@
             <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
                 <a href="/" class="text-lg font-bold tracking-tight">{{ \App\Models\Setting::current()->restaurant_name }}</a>
                 <div class="flex items-center gap-3 text-sm">
-                    <span class="hidden sm:inline">{{ auth()->user()->name }} ({{ \App\Models\User::ROLES[auth()->user()->role] ?? auth()->user()->role }})</span>
+                    <span class="hidden sm:inline">{{ auth()->user()->name }} ({{ auth()->user()->role->label() }})</span>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit" class="rounded-lg bg-white/20 px-3 py-1.5 font-semibold hover:bg-white/30">Keluar</button>

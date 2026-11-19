@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\UserRole;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,7 +21,10 @@ class RoleMiddleware
             return redirect()->route('login');
         }
 
-        $allowed = array_map('trim', explode(',', $roles));
+        $allowed = collect(explode(',', $roles))
+            ->map(fn (string $role) => UserRole::tryFrom(trim($role)))
+            ->filter()
+            ->all();
 
         if (! in_array($user->role, $allowed, true)) {
             abort(403, 'Anda tidak memiliki akses ke halaman ini.');

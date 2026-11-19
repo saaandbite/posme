@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Enums\UserRole;
 use App\Filament\Resources\UserResource\Pages;
 use App\Models\User;
 use Filament\Forms;
@@ -36,7 +37,7 @@ class UserResource extends Resource
                     ->maxLength(100),
                 Forms\Components\Select::make('role')
                     ->label('Role')
-                    ->options(User::ROLES)
+                    ->options(UserRole::options())
                     ->required(),
                 Forms\Components\TextInput::make('password')
                     ->label('Password')
@@ -61,13 +62,8 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('role')
                     ->label('Role')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => User::ROLES[$state] ?? $state)
-                    ->color(fn (string $state) => match ($state) {
-                        'admin' => 'danger',
-                        'cashier' => 'warning',
-                        'kitchen' => 'info',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn (UserRole $state) => $state->label())
+                    ->color(fn (UserRole $state) => $state->color()),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Dibuat')
                     ->dateTime('d M Y')
@@ -76,7 +72,7 @@ class UserResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('role')
                     ->label('Role')
-                    ->options(User::ROLES),
+                    ->options(UserRole::options()),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

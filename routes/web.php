@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MidtransWebhookController;
 use App\Http\Controllers\ReceiptController;
+use App\Http\Controllers\XenditWebhookController;
 use App\Livewire\CashierTerminal;
 use App\Livewire\CustomerMenu;
 use App\Livewire\KitchenBoard;
@@ -14,19 +16,11 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | Customer  : publik lewat QR (signed URL), tanpa login.
 | Staf      : login + role (admin / cashier / kitchen).
-| Webhook   : Midtrans server-to-server, tanpa CSRF (verifikasi signature).
+| Webhook   : Midtrans & Xendit server-to-server, tanpa CSRF
+|             (verifikasi signature / callback token di controller).
 */
 
-Route::get('/', function () {
-    return auth()->check()
-        ? redirect()->route(match (auth()->user()->role) {
-            'admin' => 'filament.admin.pages.dashboard',
-            'cashier' => 'cashier',
-            'kitchen' => 'kitchen',
-            default => 'login',
-        })
-        : redirect()->route('login');
-});
+Route::get('/', HomeController::class)->name('home');
 
 // Auth staf
 Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login')->middleware('guest');
@@ -54,3 +48,7 @@ Route::middleware(['auth', 'role:cashier,admin'])->group(function () {
 // Webhook Midtrans — signature_key diverifikasi di controller.
 Route::post('/midtrans/notification', [MidtransWebhookController::class, 'handle'])
     ->name('midtrans.notification');
+
+// Webhook Xendit — header x-callback-token diverifikasi di controller.
+Route::post('/xendit/notification', [XenditWebhookController::class, 'handle'])
+    ->name('xendit.notification');

@@ -28,8 +28,8 @@
                                 <p class="text-sm text-stone-500">{{ $order->order_number }} • {{ $order->created_at->format('H:i') }}</p>
                             </div>
                             <span class="rounded-full px-3 py-1 text-xs font-bold
-                                {{ $order->status === 'pending' ? 'bg-red-100 text-red-700' : ($order->status === 'preparing' ? 'bg-amber-100 text-amber-800' : ($order->status === 'ready' ? 'bg-green-100 text-green-700' : 'bg-stone-200 text-stone-600')) }}">
-                                {{ order_status_label($order->status) }}
+                                {{ match ($order->status) { \App\Enums\OrderStatus::Pending => 'bg-red-100 text-red-700', \App\Enums\OrderStatus::Preparing => 'bg-amber-100 text-amber-800', \App\Enums\OrderStatus::Ready => 'bg-green-100 text-green-700', default => 'bg-stone-200 text-stone-600' } }}">
+                                {{ $order->status->label() }}
                             </span>
                         </div>
                         <ul class="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm">
@@ -42,21 +42,21 @@
                         </ul>
                         <div class="mt-3 flex items-center justify-between text-sm">
                             <span class="font-bold">Total: {{ rupiah($order->total) }}</span>
-                            <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $order->payment_status === 'paid' ? 'bg-green-100 text-green-700' : ($order->payment_status === 'waiting' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-700') }}">
-                                {{ payment_status_label($order->payment_status) }}
-                                @if ($order->payment_status === 'paid')
-                                    ({{ $order->payment_method === 'midtrans' ? 'gateway' : $order->payment_method }})
+                            <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ match ($order->payment_status) { \App\Enums\PaymentStatus::Paid => 'bg-green-100 text-green-700', \App\Enums\PaymentStatus::Waiting => 'bg-yellow-100 text-yellow-800', default => 'bg-red-100 text-red-700' } }}">
+                                {{ $order->payment_status->label() }}
+                                @if ($order->payment_status === \App\Enums\PaymentStatus::Paid)
+                                    ({{ $order->payment_method?->isGateway() ? 'gateway' : ($order->payment_method?->label() ?? '—') }})
                                 @endif
                             </span>
                         </div>
                         <div class="mt-4 flex gap-2">
-                            @if ($order->status === 'ready')
+                            @if ($order->status === \App\Enums\OrderStatus::Ready)
                                 <button wire:click="markServed({{ $order->id }})"
                                     class="flex-1 rounded-xl bg-green-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-green-700">
                                     Antar / Disajikan
                                 </button>
                             @endif
-                            @if ($order->payment_status !== 'paid')
+                            @if ($order->payment_status !== \App\Enums\PaymentStatus::Paid)
                                 <button wire:click="selectOrder({{ $order->id }})"
                                     class="flex-1 rounded-xl bg-amber-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-amber-700">
                                     Terima Bayar
@@ -82,7 +82,7 @@
             <div class="grid gap-5 lg:grid-cols-2">
                 <div class="rounded-2xl bg-white p-5 shadow-sm">
                     <h2 class="text-lg font-bold">{{ $order->diningTable->name }} — {{ $order->order_number }}</h2>
-                    <p class="text-sm text-stone-500">{{ $order->created_at->format('d M Y, H:i') }} • Status: {{ order_status_label($order->status) }}</p>
+                    <p class="text-sm text-stone-500">{{ $order->created_at->format('d M Y, H:i') }} • Status: {{ $order->status->label() }}</p>
                     <ul class="mt-4 space-y-2 border-t border-stone-100 pt-3">
                         @foreach ($order->items as $item)
                             <li class="flex justify-between gap-2">
@@ -102,11 +102,11 @@
                 </div>
 
                 <div class="rounded-2xl bg-white p-5 shadow-sm">
-                    @if ($order->payment_status === 'paid')
+                    @if ($order->payment_status === \App\Enums\PaymentStatus::Paid)
                         <div class="rounded-xl bg-green-50 px-4 py-4 text-center">
                             <p class="text-lg font-bold text-green-800">✓ Sudah Lunas</p>
                             <p class="text-sm text-green-700">
-                                {{ $order->payment_method === 'midtrans' ? 'Via gateway (' . ($order->midtrans_payment_type ?? 'online') . ')' : 'Via ' . $order->payment_method }}
+                                {{ $order->payment_method?->isGateway() ? 'Via gateway (' . ($order->midtrans_payment_type ?? 'online') . ')' : 'Via ' . ($order->payment_method?->label() ?? '—') }}
                                 • {{ $order->paid_at?->format('H:i') }}
                             </p>
                             @if ($order->change_amount > 0)
@@ -117,7 +117,7 @@
                             class="mt-4 block rounded-xl bg-stone-800 py-3 text-center font-bold text-white hover:bg-stone-700">
                             Cetak / Lihat Struk
                         </a>
-                    @elseif ($order->status === 'cancelled')
+                    @elseif ($order->status === \App\Enums\OrderStatus::Cancelled)
                         <div class="rounded-xl bg-red-50 px-4 py-4 text-center font-bold text-red-700">Order dibatalkan</div>
                     @else
                         <h3 class="text-lg font-bold">Pembayaran</h3>
@@ -217,10 +217,10 @@
                             <td class="px-4 py-3 font-mono text-xs">{{ $order->order_number }}</td>
                             <td class="px-4 py-3">{{ $order->diningTable->name }}</td>
                             <td class="px-4 py-3 font-bold">{{ rupiah($order->total) }}</td>
-                            <td class="px-4 py-3">{{ $order->payment_status === 'paid' ? ($order->payment_method === 'midtrans' ? 'Gateway' : ucfirst($order->payment_method)) : '—' }}</td>
-                            <td class="px-4 py-3">{{ $order->status === 'cancelled' ? 'Dibatalkan' : payment_status_label($order->payment_status) }}</td>
+                            <td class="px-4 py-3">{{ $order->payment_status === \App\Enums\PaymentStatus::Paid ? ($order->payment_method?->isGateway() ? 'Gateway' : ($order->payment_method?->label() ?? '—')) : '—' }}</td>
+                            <td class="px-4 py-3">{{ $order->status === \App\Enums\OrderStatus::Cancelled ? 'Dibatalkan' : $order->payment_status->label() }}</td>
                             <td class="px-4 py-3">
-                                @if ($order->payment_status === 'paid')
+                                @if ($order->payment_status === \App\Enums\PaymentStatus::Paid)
                                     <a href="{{ route('cashier.receipt', $order) }}" target="_blank" class="font-semibold text-amber-700 hover:underline">Struk</a>
                                 @endif
                             </td>

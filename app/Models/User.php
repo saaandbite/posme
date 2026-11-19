@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -19,16 +20,6 @@ class User extends Authenticatable implements FilamentUser
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
-    public const ROLE_ADMIN = 'admin';
-    public const ROLE_CASHIER = 'cashier';
-    public const ROLE_KITCHEN = 'kitchen';
-
-    public const ROLES = [
-        self::ROLE_ADMIN => 'Admin',
-        self::ROLE_CASHIER => 'Kasir',
-        self::ROLE_KITCHEN => 'Dapur',
-    ];
-
     /**
      * Get the attributes that should be cast.
      *
@@ -39,22 +30,23 @@ class User extends Authenticatable implements FilamentUser
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'role' => UserRole::class,
         ];
     }
 
     public function isAdmin(): bool
     {
-        return $this->role === self::ROLE_ADMIN;
+        return $this->role === UserRole::Admin;
     }
 
     public function isCashier(): bool
     {
-        return $this->role === self::ROLE_CASHIER;
+        return $this->role === UserRole::Cashier;
     }
 
     public function isKitchen(): bool
     {
-        return $this->role === self::ROLE_KITCHEN;
+        return $this->role === UserRole::Kitchen;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Enums\PaymentStatus;
 use App\Models\Order;
 use Filament\Widgets\ChartWidget;
 
@@ -18,7 +19,7 @@ class SalesChart extends ChartWidget
             $date = today()->subDays($i);
             $labels[] = $date->format('d M');
             $values[] = (int) Order::whereDate('created_at', $date)
-                ->where('payment_status', Order::PAYMENT_PAID)
+                ->where('payment_status', PaymentStatus::Paid)
                 ->sum('total');
         }
 

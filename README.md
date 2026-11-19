@@ -2,14 +2,16 @@
 
 Posme adalah sistem kasir (Point of Sale) berbasis web untuk resto atau kafe.
 Customer scan QR code di meja, pesan dari HP tanpa login, dan bisa bayar
-sendiri lewat payment gateway (Midtrans Snap: QRIS / VA / e-wallet) atau
-bayar di kasir. Dapur melihat order masuk di layar khusus (KDS), kasir
-memantau semua order dan menerima pembayaran, admin mengatur semuanya
-lewat panel Filament.
+sendiri lewat payment gateway (Midtrans Snap atau Xendit Invoice: QRIS / VA /
+e-wallet) atau bayar di kasir. Dapur melihat order masuk di layar khusus
+(KDS), kasir memantau semua order dan menerima pembayaran, admin mengatur
+semuanya lewat panel Filament — termasuk gateway dan tampilan menu, tanpa
+sentuh kode (low-code).
 
 Stack: **Laravel 13** (PHP 8.3) + **Filament 3** (panel admin) +
 **Livewire 3** + **SQLite** (tanpa setup database) +
-**Midtrans Snap** (`midtrans/midtrans-php`) + **simple-qrcode**.
+**Midtrans Snap** (`midtrans/midtrans-php`) + **Xendit Invoice** (HTTP client
+Laravel, tanpa SDK) + **simple-qrcode**.
 
 Bahasa UI: Bahasa Indonesia. Mata uang: Rupiah.
 
@@ -80,7 +82,13 @@ php artisan serve
   grafik pendapatan 7 hari, item terlaris, filter status & periode
   di halaman Order.
 - Pengaturan: nama resto, pajak %, service %, metode bayar manual
-  (tunai/QRIS), status gateway Midtrans.
+  (tunai/QRIS), status gateway aktif, dan tampilan menu customer
+  (layout grid/list, default foto & deskripsi).
+- **Pengaturan Gateway** (`/admin/gateway-settings`, menu Sistem):
+  pilih provider aktif, isi key, mode Sandbox/Produksi, tes koneksi.
+- **Menu Builder**: drag-and-drop urutan kategori & item menu,
+  toggle tampil foto/deskripsi per item, badge/label bebas
+  (mis. "Baru", "Best Seller", "Pedas").
 
 ### Kasir (`/cashier`)
 - **Monitor Order** (live, refresh 5 detik): semua meja, daftar item +
@@ -109,48 +117,130 @@ php artisan serve
   status bayar (Belum bayar / Menunggu pembayaran / Lunas) +
   tombol "Bayar Sekarang" (Snap) atau "Bayar di kasir".
 
-## Pembayaran Midtrans Snap
+## Pembayaran Midtrans Snap & Xendit Invoice
 
 Customer bayar sendiri dari HP di meja lewat QRIS / VA / e-wallet.
-Setelah bayar, webhook Midtrans mengubah `payment_status` order jadi
+Setelah bayar, webhook gateway mengubah `payment_status` order jadi
 `paid` dan halaman lacak menampilkan bukti bayar.
 
-### Sandbox (untuk coba-coba)
+Gateway yang dipakai dipilih owner di halaman **Pengaturan Gateway**
+(`/admin/gateway-settings`): "Tidak ada (bayar di kasir saja)",
+"Midtrans", atau "Xendit". Hanya satu yang aktif dalam satu waktu.
+Alur bayar customer membaca gateway aktif dari database saat runtime.
 
-1. Daftar akun di [Midtrans](https://dashboard.midtrans.com/register)
-   (gratis, pilih mode Sandbox).
-2. Di dashboard Midtrans: **Settings → Access Keys**, salin
-   **Server Key** dan **Client Key** (Sandbox).
-3. Isi di `.env`:
-   ```env
-   MIDTRANS_SERVER_KEY=SB-Mid-server-xxxx
-   MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx
-   MIDTRANS_IS_PRODUCTION=false
-   ```
-4. Restart `php artisan serve`. Tombol "Bayar Sekarang" di halaman
-   customer akan membuka popup Snap (sandbox).
-5. Untuk menguji webhook lokal, jalankan `ngrok http 8000` lalu
-   daftarkan URL webhook `https://<ngrok-url>/midtrans/notification`
-   di dashboard Midtrans (Settings → Configuration → Payment
-   Notification URL).
+### Mengisi key — lewat dashboard (cara utama)
 
-### Produksi (yang harus disiapkan Haris)
+1. Buka `/admin` → menu **Sistem → Pengaturan Gateway**.
+2. Pilih provider aktif di dropdown "Gateway pembayaran".
+3. Isi kredensial provider tersebut:
+   - **Midtrans**: Server Key + Client Key (dashboard Midtrans →
+     Settings → Access Keys).
+   - **Xendit**: Secret Key + Webhook Callback Token (dashboard
+     Xendit → Settings → Developers → API Keys & Webhooks).
+4. Atur toggle **Mode Produksi**: mati = Sandbox (uang mainan),
+   nyala = Produksi (uang asli, pakai key produksi).
+5. Klik **"Tes koneksi"** untuk memastikan key valid:
+   - Midtrans: cek status order dummy via Core API
+     (401 = key salah, respons lain = key valid).
+   - Xendit: GET `/balance` (200 = key valid).
+   Hasil tes disimpan dan ditampilkan di halaman yang sama.
+6. Klik **"Simpan Pengaturan Gateway"**.
 
-1. Akun Midtrans produksi (verifikasi bisnis) + ganti key di `.env`
-   dengan key **produksi**, lalu set `MIDTRANS_IS_PRODUCTION=true`.
-2. Daftarkan webhook URL produksi, mis.
-   `https://posme-domain-kamu/midtrans/notification`, di dashboard
-   Midtrans (Settings → Configuration).
-3. Pastikan webhook bisa diakses publik (HTTPS) — kalau tidak,
-   pembayaran gateway tidak akan terkonfirmasi otomatis dan kasir
-   harus menandai lunas manual.
+### Fallback `.env` (cara lama, tetap didukung)
+
+Bila database gateway masih kosong, aplikasi memakai nilai `.env`
+sebagai fallback, jadi instalasi lama tetap jalan tanpa perubahan:
+
+```env
+MIDTRANS_SERVER_KEY=SB-Mid-server-xxxx
+MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx
+MIDTRANS_IS_PRODUCTION=false
+
+XENDIT_SECRET_KEY=xnd_development_xxxx
+XENDIT_CALLBACK_TOKEN=token-rahasia-xxxx
+```
+
+**Kredensial di database mengalahkan `.env`.** Begitu owner mengisi
+key di dashboard, key itulah yang dipakai (termasuk untuk verifikasi
+signature webhook Midtrans dan token webhook Xendit).
+
+### Keamanan key
+
+- Key yang disimpan lewat dashboard **dienkripsi** di database
+  (cast Laravel `encrypted:array`, kunci enkripsi = `APP_KEY`).
+  Nilai mentah di database tidak bisa dibaca tanpa `APP_KEY`.
+- Di halaman pengaturan, key hanya tampil **4 karakter terakhir**
+  (ter-mask). Key hanya berubah bila admin mengisi ulang fieldnya —
+  menyimpan form tanpa mengubah field tidak menghapus key lama.
+- **Jangan pernah** menulis key asli di README, chat, atau commit.
+  Key produksi hanya diisi owner sendiri di dashboard / `.env`
+  server produksi.
+- Webhook Xendit **menolak** request tanpa header
+  `x-callback-token` yang cocok dengan token tersimpan (403).
+  Webhook Midtrans tetap memverifikasi signature
+  `sha512(order_id + status_code + gross_amount + server_key)`.
+
+### Webhook (produksi)
+
+- Midtrans: daftarkan `https://domain-kamu/midtrans/notification`
+  di dashboard Midtrans (Settings → Configuration → Payment
+  Notification URL).
+- Xendit: daftarkan `https://domain-kamu/xendit/notification`
+  di dashboard Xendit (Settings → Developers → Webhooks) dan isi
+  callback token yang sama di halaman Pengaturan Gateway.
+- Untuk menguji webhook lokal, jalankan `ngrok http 8000` lalu
+  daftarkan URL `https://<ngrok-url>/midtrans/notification` (atau
+  `/xendit/notification`).
 
 ### Kalau key belum diisi
 
-Aplikasi **tetap jalan normal**. Gateway ditandai "belum
-dikonfigurasi" di halaman Pengaturan admin, dan customer diarahkan
-ke opsi "Bayar di kasir (tunai/QRIS)". Tidak ada error karena key
-kosong.
+Aplikasi **tetap jalan normal**. Gateway ditandai "tidak ada gateway
+aktif" di halaman Pengaturan admin, dan customer diarahkan ke opsi
+"Bayar di kasir (tunai/QRIS)". Tidak ada error karena key kosong.
+
+## Low-code: Menu Builder
+
+Owner menata tampilan menu customer sendiri dari panel admin, tanpa
+sentuh kode.
+
+### Urutan (drag-and-drop)
+
+- **Kategori Menu** (`/admin/categories`): seret baris untuk mengubah
+  `sort_order` — urutan kategori di menu customer mengikuti ini.
+- **Item Menu** (`/admin/menu-items`): sama, seret baris untuk
+  mengubah urutan item di dalam daftar.
+- Urutan juga bisa diubah manual lewat field "Urutan tampil" di form.
+
+### Tampilan per item (form Item Menu → bagian "Tampilan di menu customer")
+
+- **Tampilkan foto**: Ya / Tidak / Ikuti default global.
+- **Tampilkan deskripsi**: Ya / Tidak / Ikuti default global.
+- **Badge / label**: teks bebas, mis. "Baru", "Best Seller", "Pedas"
+  (boleh kosong — tidak tampil apa-apa).
+
+### Tampilan global (Pengaturan → "Tampilan Menu")
+
+- **Layout menu**: Grid (2 kolom) atau List (1 kolom).
+- **Tampilkan foto (default)** dan **Tampilkan deskripsi (default)**:
+  berlaku untuk semua item yang toggle per-itemnya dibiarkan
+  "Ikuti default global". Toggle per item mengalahkan default ini.
+
+### Yang tetap dijaga
+
+- Kategori/item **nonaktif tidak tampil** di menu customer.
+- Item **habis tetap tidak bisa dipesan** (tombol tambah disembunyikan).
+- **Harga tetap dihitung dari server** — harga di request customer
+  tidak pernah dipercaya.
+
+### Produksi (yang harus disiapkan Haris)
+
+1. Akun Midtrans/Xendit produksi (verifikasi bisnis) + isi key
+   **produksi** di halaman Pengaturan Gateway, lalu nyalakan
+   toggle Mode Produksi untuk provider yang dipakai.
+2. Daftarkan webhook URL produksi (lihat di atas).
+3. Pastikan webhook bisa diakses publik (HTTPS) — kalau tidak,
+   pembayaran gateway tidak akan terkonfirmasi otomatis dan kasir
+   harus menandai lunas manual.
 
 ## Keamanan
 
@@ -167,23 +257,41 @@ kosong.
 - Webhook Midtrans memverifikasi signature
   (`sha512(order_id + status_code + gross_amount + server_key)`)
   **sebelum** mengubah status apa pun; signature salah → 403.
-- CSRF aktif (kecuali route webhook Midtrans), mass assignment
+- Webhook Xendit memverifikasi header `x-callback-token` dengan
+  token tersimpan **sebelum** mengubah status apa pun; token salah
+  atau tidak ada → 403.
+- Kredensial gateway yang diisi lewat dashboard disimpan **terenkripsi**
+  di database (`encrypted:array`) dan hanya tampil 4 karakter terakhir
+  di UI; `.env` tidak pernah di-commit.
+- CSRF aktif (kecuali route webhook Midtrans & Xendit), mass assignment
   dijaga (`$fillable`), `.env` tidak pernah di-commit.
 
 ## Testing
 
 ```bash
 php artisan test
-# 17 passed (61 assertions)
+# 29 passed (157 assertions)
 ```
 
-Test (`tests/Feature/PosFlowTest.php`) mencakup: customer bisa buat
+Test (`tests/Feature/PosFlowTest.php`, 17 test) mencakup: customer bisa buat
 order lewat signed URL; harga diambil dari server (bukan request);
 URL tanpa signature ditolak; kitchen tidak bisa buka admin/kasir;
 cashier tidak bisa buka admin/dapur; cashier menandai lunas dengan
 kembalian benar; uang kurang ditolak; order batal tidak bisa dibayar;
 dapur memajukan status; webhook Midtrans signature valid → lunas,
 signature salah → 403; gateway belum dikonfigurasi tidak error.
+
+Test (`tests/Feature/LowcodeTest.php`, 12 test) mencakup: reorder
+kategori/item tersimpan dan tercermin di menu; kategori/item nonaktif
+tidak tampil; toggle foto/deskripsi menyembunyikan field di menu
+(termasuk fallback default global); badge tampil dan layout grid/list
+mengikuti pengaturan; gateway settings tersimpan terenkripsi dan tampil
+ter-mask; halaman Pengaturan Gateway bisa dibuka & disimpan admin;
+alur bayar memakai gateway aktif dari database; tanpa gateway aktif
+fallback kasir jalan tanpa error; kredensial database mengalahkan
+`.env` untuk verifikasi signature; webhook Xendit token salah → 403,
+token benar → lunas, EXPIRED → kembali belum bayar; enum status &
+role bekerja.
 
 ## Screenshot
 
@@ -195,15 +303,19 @@ file biner — lihat di repo lokal):
 - `03-board-dapur.png` — board dapur (KDS)
 - `04-terminal-kasir.png` — monitor order kasir
 - `05-dashboard-admin.png` — dashboard admin Filament
+- `06-gateway-settings.png` — halaman Pengaturan Gateway (low-code)
+- `07-menu-builder.png` — daftar Item Menu dengan kolom Badge (Menu Builder)
 
 ## Yang BELUM selesai / butuh Haris
 
 - **Deploy publik** — aplikasi baru jalan lokal (`php artisan serve`).
   Belum di-deploy ke hosting/VPS/Vercel. Perlu Haris memilih hosting
   (mis. VPS + Nginx, atau platform Laravel seperti Laravel Cloud).
-- **Key Midtrans asli** — `.env` masih kosong (sandbox/produksi).
-  Tanpa key, pembayaran gateway tidak aktif dan customer diarahkan
-  "Bayar di kasir". Lihat bagian "Pembayaran Midtrans Snap" di atas.
+- **Key gateway asli** — database gateway masih kosong (dan `.env`
+  juga kosong untuk Midtrans/Xendit). Tanpa key, pembayaran gateway
+  tidak aktif dan customer diarahkan "Bayar di kasir". Key produksi
+  harus diisi Haris sendiri di halaman Pengaturan Gateway
+  (lihat bagian "Pembayaran Midtrans Snap & Xendit Invoice").
 - **Foto menu asli** — item menu contoh belum punya foto (foto bisa
   di-upload dari panel admin, tersimpan di `storage/app/public`).
 - **Domain & HTTPS** — webhook Midtrans produksi butuh URL publik

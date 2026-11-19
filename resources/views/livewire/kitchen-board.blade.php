@@ -6,9 +6,9 @@
                 <p class="text-sm text-stone-400">{{ now()->format('d M Y, H:i') }} WIB • refresh otomatis tiap 5 detik</p>
             </div>
             <div class="flex items-center gap-2">
-                <span class="rounded-full bg-red-600 px-4 py-2 text-lg font-bold">{{ $this->orders->where('status', 'pending')->count() }} Baru</span>
-                <span class="rounded-full bg-amber-500 px-4 py-2 text-lg font-bold text-stone-950">{{ $this->orders->where('status', 'preparing')->count() }} Disiapkan</span>
-                <span class="rounded-full bg-green-600 px-4 py-2 text-lg font-bold">{{ $this->orders->where('status', 'ready')->count() }} Siap</span>
+                <span class="rounded-full bg-red-600 px-4 py-2 text-lg font-bold">{{ $this->orders->where('status', \App\Enums\OrderStatus::Pending)->count() }} Baru</span>
+                <span class="rounded-full bg-amber-500 px-4 py-2 text-lg font-bold text-stone-950">{{ $this->orders->where('status', \App\Enums\OrderStatus::Preparing)->count() }} Disiapkan</span>
+                <span class="rounded-full bg-green-600 px-4 py-2 text-lg font-bold">{{ $this->orders->where('status', \App\Enums\OrderStatus::Ready)->count() }} Siap</span>
             </div>
         </div>
 
@@ -23,15 +23,15 @@
                     @php
                         $isNew = $order->created_at->diffInSeconds(now()) < 90;
                         $badge = match ($order->status) {
-                            'pending' => 'bg-red-600',
-                            'preparing' => 'bg-amber-500 text-stone-950',
-                            'ready' => 'bg-green-600',
+                            \App\Enums\OrderStatus::Pending => 'bg-red-600',
+                            \App\Enums\OrderStatus::Preparing => 'bg-amber-500 text-stone-950',
+                            \App\Enums\OrderStatus::Ready => 'bg-green-600',
                             default => 'bg-stone-600',
                         };
                         $nextLabel = match ($order->status) {
-                            'pending' => 'Mulai Siapkan',
-                            'preparing' => 'Tandai Siap',
-                            'ready' => 'Tandai Disajikan',
+                            \App\Enums\OrderStatus::Pending => 'Mulai Siapkan',
+                            \App\Enums\OrderStatus::Preparing => 'Tandai Siap',
+                            \App\Enums\OrderStatus::Ready => 'Tandai Disajikan',
                             default => null,
                         };
                     @endphp
@@ -42,7 +42,7 @@
                                 <p class="text-sm text-stone-400">{{ $order->order_number }} • {{ $order->created_at->format('H:i') }} ({{ $order->created_at->diffForHumans() }})</p>
                             </div>
                             <span class="shrink-0 rounded-full px-3 py-1.5 text-sm font-bold {{ $badge }}">
-                                {{ order_status_label($order->status) }}
+                                {{ $order->status->label() }}
                                 @if ($isNew)
                                     • BARU
                                 @endif
@@ -66,8 +66,8 @@
                         @endif
 
                         <div class="mt-4 flex items-center justify-between gap-2">
-                            <span class="rounded-full px-3 py-1 text-xs font-bold {{ $order->payment_status === 'paid' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300' }}">
-                                {{ payment_status_label($order->payment_status) }}
+                            <span class="rounded-full px-3 py-1 text-xs font-bold {{ $order->payment_status === \App\Enums\PaymentStatus::Paid ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300' }}">
+                                {{ $order->payment_status->label() }}
                             </span>
                             @if ($nextLabel)
                                 <button wire:click="advanceOrder({{ $order->id }})"

@@ -2,12 +2,17 @@
 
 namespace App\Livewire;
 
+use App\Enums\GatewayProvider;
+use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
 use App\Models\DiningTable;
 use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Setting;
 use App\Services\MidtransService;
+use App\Services\PaymentGateway;
+use App\Services\XenditService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Computed;
@@ -28,7 +33,8 @@ class CustomerMenu extends Component
 
     public ?Order $order = null;
 
-    public bool $gatewayConfigured = false;
+    /** Gateway yang aktif dan terkonfigurasi — null = bayar di kasir saja. */
+    public ?GatewayProvider $activeGateway = null;
 
     public string $customerNote = '';
 
@@ -36,13 +42,13 @@ class CustomerMenu extends Component
     {
         $this->table = $table;
         $this->cart = session()->get('posme.cart.'.$table->code, []);
-        $this->gatewayConfigured = MidtransService::configured();
+        $this->activeGateway = PaymentGateway::usable();
 
         // Lanjutkan lacak pesanan yang masih aktif di meja ini.
         $orderId = session()->get('posme.order.'.$table->code);
         if ($orderId) {
             $order = Order::with('items')->find($orderId);
-            if ($order && $order->status !== Order::STATUS_CANCELLED) {
+            if ($order && $order->status !== OrderStatus::Cancelled) {
                 $this->order = $order;
             }
         }
@@ -177,8 +183,8 @@ class CustomerMenu extends Component
             $order = Order::create([
                 'dining_table_id' => $this->table->id,
                 'order_number' => Order::generateNumber(),
-                'status' => Order::STATUS_PENDING,
-                'payment_status' => Order::PAYMENT_UNPAID,
+                'status' => OrderStatus::Pending,
+                'payment_status' => PaymentStatus::Unpaid,
                 'customer_note' => mb_substr(trim($this->customerNote), 0, 500) ?: null,
                 'subtotal' => 0,
                 'tax_amount' => 0,
@@ -211,14 +217,30 @@ class CustomerMenu extends Component
         $this->order = $order->load('items');
     }
 
-    /** Minta Snap token lalu buka popup Midtrans di HP customer. */
+    /**
+     * Mulai pembayaran lewat gateway yang aktif:
+     * Midtrans → popup Snap; Xendit → redirect ke halaman Invoice;
+     * tidak ada gateway → bayar di kasir (tidak error).
+     */
     public function startPayment(): void
     {
         if (! $this->order || ! $this->order->canBePaid()) {
             return;
         }
 
-        $token = MidtransService::createSnapToken($this->order->fresh());
+        $order = $this->order->fresh();
+
+        match ($this->activeGateway) {
+            GatewayProvider::Midtrans => $this->startMidtransPayment($order),
+            GatewayProvider::Xendit => $this->startXenditPayment($order),
+            default => $this->addError('payment', 'Pembayaran online tidak aktif. Silakan bayar di kasir.'),
+        };
+    }
+
+    /** Minta Snap token lalu buka popup Midtrans di HP customer. */
+    protected function startMidtransPayment(Order $order): void
+    {
+        $token = MidtransService::createSnapToken($order);
 
         if (! $token) {
             $this->addError('payment', 'Pembayaran online sedang tidak tersedia. Silakan bayar di kasir.');
@@ -227,6 +249,20 @@ class CustomerMenu extends Component
         }
 
         $this->dispatch('snap-ready', token: $token);
+    }
+
+    /** Buat Invoice Xendit lalu arahkan customer ke halaman pembayarannya. */
+    protected function startXenditPayment(Order $order): void
+    {
+        $url = XenditService::createInvoice($order);
+
+        if (! $url) {
+            $this->addError('payment', 'Pembayaran online sedang tidak tersedia. Silakan bayar di kasir.');
+
+            return;
+        }
+
+        $this->redirect($url);
     }
 
     /** Dipanggil polling dari halaman lacak status. */

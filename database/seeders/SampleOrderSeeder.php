@@ -2,6 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Enums\OrderStatus;
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus;
 use App\Models\DiningTable;
 use App\Models\MenuItem;
 use App\Models\Order;
@@ -27,10 +30,10 @@ class SampleOrderSeeder extends Seeder
         }
 
         $combos = [
-            ['created' => now()->subDay()->setTime(12, 5), 'paid' => true, 'method' => 'cash'],
-            ['created' => now()->subDay()->setTime(18, 40), 'paid' => true, 'method' => 'qris'],
-            ['created' => now()->subHours(3), 'paid' => true, 'method' => 'cash'],
-            ['created' => now()->subHours(1), 'paid' => true, 'method' => 'midtrans'],
+            ['created' => now()->subDay()->setTime(12, 5), 'paid' => true, 'method' => PaymentMethod::Cash],
+            ['created' => now()->subDay()->setTime(18, 40), 'paid' => true, 'method' => PaymentMethod::Qris],
+            ['created' => now()->subHours(3), 'paid' => true, 'method' => PaymentMethod::Cash],
+            ['created' => now()->subHours(1), 'paid' => true, 'method' => PaymentMethod::Midtrans],
         ];
 
         $seqPerDate = [];
@@ -42,8 +45,8 @@ class SampleOrderSeeder extends Seeder
             $order = Order::create([
                 'dining_table_id' => $tables[$i % $tables->count()]->id,
                 'order_number' => 'POS-'.$dateKey.'-'.str_pad((string) $seqPerDate[$dateKey], 3, '0', STR_PAD_LEFT),
-                'status' => Order::STATUS_SERVED,
-                'payment_status' => Order::PAYMENT_PAID,
+                'status' => OrderStatus::Served,
+                'payment_status' => PaymentStatus::Paid,
                 'payment_method' => $combo['method'],
                 'subtotal' => 0,
                 'tax_amount' => 0,

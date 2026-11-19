@@ -3,7 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Models\Setting;
-use App\Services\MidtransService;
+use App\Services\PaymentGateway;
 use Filament\Forms;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -66,14 +66,35 @@ class SettingsPage extends Page implements HasForms
                             ->label('Terima QRIS (manual)'),
                     ])
                     ->columns(2),
-                Forms\Components\Section::make('Payment Gateway (Midtrans Snap)')
+                Forms\Components\Section::make('Tampilan Menu')
+                    ->description('Tampilan default menu customer. Toggle per item di halaman Item Menu mengalahkan default ini.')
+                    ->schema([
+                        Forms\Components\Select::make('menu_layout')
+                            ->label('Layout menu')
+                            ->options([
+                                'grid' => 'Grid (2 kolom)',
+                                'list' => 'List (1 kolom)',
+                            ])
+                            ->required()
+                            ->native(false),
+                        Forms\Components\Toggle::make('menu_default_show_image')
+                            ->label('Tampilkan foto (default)'),
+                        Forms\Components\Toggle::make('menu_default_show_description')
+                            ->label('Tampilkan deskripsi (default)'),
+                    ])
+                    ->columns(2),
+                Forms\Components\Section::make('Payment Gateway')
                     ->description('Customer bisa bayar sendiri dari HP di meja lewat QRIS / VA / e-wallet.')
                     ->schema([
-                        Forms\Components\Placeholder::make('midtrans_status')
-                            ->label('Status gateway')
-                            ->content(fn () => MidtransService::configured()
-                                ? 'Terhubung ('.(MidtransService::isProduction() ? 'PRODUKSI' : 'Sandbox').'). Customer bisa bayar lewat tombol "Bayar Sekarang".'
-                                : 'BELUM DIKONFIGURASI — isi MIDTRANS_SERVER_KEY dan MIDTRANS_CLIENT_KEY di file .env, lalu restart aplikasi. Selama belum diisi, customer diarahkan "Bayar di kasir" dan aplikasi tetap jalan normal.'),
+                        Forms\Components\Placeholder::make('gateway_status')
+                            ->label('Gateway aktif')
+                            ->content(function () {
+                                $provider = PaymentGateway::usable();
+
+                                return $provider
+                                    ? $provider->label().' ('.(PaymentGateway::isProduction($provider) ? 'PRODUKSI' : 'Sandbox').') — customer bisa bayar lewat tombol "Bayar Sekarang".'
+                                    : 'Tidak ada gateway aktif — customer diarahkan "Bayar di kasir" dan aplikasi tetap jalan normal. Atur di halaman Pengaturan Gateway (menu Sistem).';
+                            }),
                     ]),
             ])
             ->statePath('data');

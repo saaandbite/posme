@@ -46,7 +46,7 @@
             <div class="flex justify-between"><span>Service</span><span>{{ rupiah($order->service_amount) }}</span></div>
         @endif
         <div class="flex justify-between text-base font-bold"><span>TOTAL</span><span>{{ rupiah($order->total) }}</span></div>
-        <div class="flex justify-between"><span>Bayar ({{ $order->payment_method === 'midtrans' ? 'gateway ' . ($order->midtrans_payment_type ?? '') : $order->payment_method }})</span><span>{{ rupiah($order->paid_amount ?? 0) }}</span></div>
+        <div class="flex justify-between"><span>Bayar ({{ $order->payment_method?->isGateway() ? 'gateway ' . ($order->midtrans_payment_type ?? '') : ($order->payment_method?->label() ?? '—') }})</span><span>{{ rupiah($order->paid_amount ?? 0) }}</span></div>
         @if (($order->change_amount ?? 0) > 0)
             <div class="flex justify-between"><span>Kembalian</span><span>{{ rupiah($order->change_amount) }}</span></div>
         @endif

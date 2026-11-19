@@ -9,10 +9,13 @@ class Category extends Model
 {
     protected $fillable = ['name', 'description', 'sort_order', 'is_active'];
 
-    protected $casts = [
-        'is_active' => 'boolean',
-        'sort_order' => 'integer',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+            'sort_order' => 'integer',
+        ];
+    }
 
     public function menuItems(): HasMany
     {

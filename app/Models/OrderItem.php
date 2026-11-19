@@ -11,11 +11,14 @@ class OrderItem extends Model
         'order_id', 'menu_item_id', 'name', 'price', 'qty', 'note', 'subtotal',
     ];
 
-    protected $casts = [
-        'price' => 'integer',
-        'qty' => 'integer',
-        'subtotal' => 'integer',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'price' => 'integer',
+            'qty' => 'integer',
+            'subtotal' => 'integer',
+        ];
+    }
 
     public function order(): BelongsTo
     {

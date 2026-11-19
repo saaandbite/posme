@@ -2,30 +2,34 @@
 
 namespace App\Services;
 
+use App\Enums\GatewayProvider;
 use App\Models\Order;
 use App\Models\Setting;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Midtrans\Config;
 use Midtrans\Snap;
 
 /**
- * Pembayaran lewat Midtrans Snap (QRIS / VA / e-wallet).
+ * Pembayaran lewat Midtrans Snap (QRIS / VA / e-wallet / retail).
  *
- * Gateway bersifat OPSIONAL: bila MIDTRANS_SERVER_KEY / MIDTRANS_CLIENT_KEY
- * belum diisi, configured() bernilai false dan aplikasi memakai fallback
- * "Bayar di kasir" — tidak ada error karena key kosong.
+ * Kredensial dibaca lewat PaymentGateway: database (diatur owner dari
+ * dashboard) didahulukan, .env (MIDTRANS_*) sebagai fallback.
+ *
+ * Gateway bersifat OPSIONAL: bila key belum diisi, configured() bernilai
+ * false dan aplikasi memakai fallback "Bayar di kasir" — tidak ada error
+ * karena key kosong.
  */
 class MidtransService
 {
     public static function configured(): bool
     {
-        return filled(config('services.midtrans.server_key'))
-            && filled(config('services.midtrans.client_key'));
+        return PaymentGateway::isConfigured(GatewayProvider::Midtrans);
     }
 
     public static function isProduction(): bool
     {
-        return (bool) config('services.midtrans.is_production', false);
+        return PaymentGateway::isProduction(GatewayProvider::Midtrans);
     }
 
     /** URL file snap.js sesuai environment (sandbox/produksi). */
@@ -38,12 +42,21 @@ class MidtransService
 
     public static function clientKey(): ?string
     {
-        return config('services.midtrans.client_key') ?: null;
+        $key = PaymentGateway::credentialsFor(GatewayProvider::Midtrans)['client_key'] ?? null;
+
+        return filled($key) ? (string) $key : null;
+    }
+
+    protected static function serverKey(): ?string
+    {
+        $key = PaymentGateway::credentialsFor(GatewayProvider::Midtrans)['server_key'] ?? null;
+
+        return filled($key) ? (string) $key : null;
     }
 
     protected static function boot(): void
     {
-        Config::$serverKey = config('services.midtrans.server_key');
+        Config::$serverKey = self::serverKey();
         Config::$isProduction = self::isProduction();
         Config::$isSanitized = true;
         Config::$is3ds = true;
@@ -51,7 +64,7 @@ class MidtransService
 
     /**
      * Buat (atau pakai ulang) Snap token untuk sebuah order.
-     * Mengembalikan null bila gateway belum dikonfigurasi.
+     * Mengembalikan null bila gateway belum dikonfigurasi atau Midtrans error.
      */
     public static function createSnapToken(Order $order): ?string
     {
@@ -91,6 +104,9 @@ class MidtransService
             'customer_details' => [
                 'first_name' => 'Pelanggan '.$order->diningTable->name,
             ],
+            'callbacks' => [
+                'finish' => $order->diningTable->orderUrl(),
+            ],
         ];
 
         try {
@@ -107,12 +123,47 @@ class MidtransService
     }
 
     /**
+     * Tes koneksi: cek status order dummy via Core API.
+     * 401 = key salah; 404 = key valid (order dummy memang tidak ada);
+     * respons lain yang bukan 401 juga berarti key diterima.
+     * $credentials: ['server_key' => ...] — boleh dari form (belum disimpan).
+     *
+     * @return array{ok: bool, message: string}
+     */
+    public static function testConnection(array $credentials = []): array
+    {
+        $serverKey = $credentials['server_key'] ?? self::serverKey();
+
+        if (! filled($serverKey)) {
+            return ['ok' => false, 'message' => 'Server Key belum diisi.'];
+        }
+
+        $base = self::isProduction()
+            ? 'https://api.midtrans.com'
+            : 'https://api.sandbox.midtrans.com';
+
+        try {
+            $response = Http::withBasicAuth((string) $serverKey, '')
+                ->timeout(15)
+                ->get($base.'/v2/POSME-TEST-KEY-CHECK/status');
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'message' => 'Tidak bisa menghubungi Midtrans: '.$e->getMessage()];
+        }
+
+        return match ($response->status()) {
+            401 => ['ok' => false, 'message' => 'Server Key salah (401 Unauthorized). Periksa kembali key-nya.'],
+            404 => ['ok' => true, 'message' => 'Koneksi berhasil — Server Key valid (order dummy tidak ditemukan, seperti yang diharapkan).'],
+            default => ['ok' => true, 'message' => 'Koneksi berhasil — Midtrans menjawab HTTP '.$response->status().'.'],
+        };
+    }
+
+    /**
      * Verifikasi signature_key dari notifikasi Midtrans.
      * Rumus resmi: sha512(order_id + status_code + gross_amount + server_key).
      */
     public static function verifySignature(array $payload): bool
     {
-        $serverKey = config('services.midtrans.server_key');
+        $serverKey = self::serverKey();
 
         if (! filled($serverKey)) {
             return false;

@@ -2,6 +2,9 @@
 
 namespace App\Filament\Resources;
 
+use App\Enums\OrderStatus;
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus;
 use App\Filament\Resources\OrderResource\Pages;
 use App\Models\Order;
 use Filament\Forms;
@@ -50,32 +53,16 @@ class OrderResource extends Resource
                         Infolists\Components\TextEntry::make('status')
                             ->label('Status')
                             ->badge()
-                            ->formatStateUsing(fn (string $state) => Order::STATUSES[$state] ?? $state)
-                            ->color(fn (string $state) => match ($state) {
-                                'pending' => 'danger',
-                                'preparing' => 'warning',
-                                'ready' => 'success',
-                                'served' => 'gray',
-                                'cancelled' => 'gray',
-                                default => 'gray',
-                            }),
+                            ->formatStateUsing(fn (OrderStatus $state) => $state->label())
+                            ->color(fn (OrderStatus $state) => $state->color()),
                         Infolists\Components\TextEntry::make('payment_status')
                             ->label('Pembayaran')
                             ->badge()
-                            ->formatStateUsing(fn (string $state) => payment_status_label($state))
-                            ->color(fn (string $state) => match ($state) {
-                                'paid' => 'success',
-                                'waiting' => 'warning',
-                                default => 'danger',
-                            }),
+                            ->formatStateUsing(fn (PaymentStatus $state) => $state->label())
+                            ->color(fn (PaymentStatus $state) => $state->color()),
                         Infolists\Components\TextEntry::make('payment_method')
                             ->label('Metode')
-                            ->formatStateUsing(fn (?string $state) => $state ? match ($state) {
-                                'cash' => 'Tunai',
-                                'qris' => 'QRIS',
-                                'midtrans' => 'Gateway (Midtrans)',
-                                default => $state,
-                            } : '—'),
+                            ->formatStateUsing(fn (?PaymentMethod $state) => $state?->label() ?? '—'),
                         Infolists\Components\TextEntry::make('created_at')
                             ->label('Waktu order')
                             ->dateTime('d M Y, H:i'),
@@ -128,24 +115,13 @@ class OrderResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => Order::STATUSES[$state] ?? $state)
-                    ->color(fn (string $state) => match ($state) {
-                        'pending' => 'danger',
-                        'preparing' => 'warning',
-                        'ready' => 'success',
-                        'served' => 'gray',
-                        'cancelled' => 'gray',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn (OrderStatus $state) => $state->label())
+                    ->color(fn (OrderStatus $state) => $state->color()),
                 Tables\Columns\TextColumn::make('payment_status')
                     ->label('Bayar')
                     ->badge()
-                    ->formatStateUsing(fn (string $state) => payment_status_label($state))
-                    ->color(fn (string $state) => match ($state) {
-                        'paid' => 'success',
-                        'waiting' => 'warning',
-                        default => 'danger',
-                    }),
+                    ->formatStateUsing(fn (PaymentStatus $state) => $state->label())
+                    ->color(fn (PaymentStatus $state) => $state->color()),
                 Tables\Columns\TextColumn::make('total')
                     ->label('Total')
                     ->money('IDR')
@@ -159,14 +135,10 @@ class OrderResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Status order')
-                    ->options(Order::STATUSES),
+                    ->options(OrderStatus::options()),
                 Tables\Filters\SelectFilter::make('payment_status')
                     ->label('Status bayar')
-                    ->options([
-                        'unpaid' => 'Belum bayar',
-                        'waiting' => 'Menunggu pembayaran',
-                        'paid' => 'Lunas',
-                    ]),
+                    ->options(PaymentStatus::options()),
                 Tables\Filters\Filter::make('created_at')
                     ->label('Periode')
                     ->form([
@@ -186,7 +158,7 @@ class OrderResource extends Resource
                     ->icon('heroicon-o-banknotes')
                     ->visible(fn (Order $record) => $record->canBePaid())
                     ->requiresConfirmation()
-                    ->action(fn (Order $record) => $record->markPaidManually('cash', $record->total)),
+                    ->action(fn (Order $record) => $record->markPaidManually(PaymentMethod::Cash, $record->total)),
                 Tables\Actions\Action::make('cancel')
                     ->label('Batalkan')
                     ->icon('heroicon-o-x-circle')
@@ -200,7 +172,7 @@ class OrderResource extends Resource
                     ])
                     ->action(function (Order $record, array $data) {
                         $record->update([
-                            'status' => Order::STATUS_CANCELLED,
+                            'status' => OrderStatus::Cancelled,
                             'cancelled_reason' => $data['cancelled_reason'],
                         ]);
                     }),

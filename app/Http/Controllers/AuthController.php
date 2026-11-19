@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UserRole;
+use App\Http\Requests\LoginRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,26 +16,15 @@ class AuthController extends Controller
         return view('auth.login');
     }
 
-    public function login(Request $request): RedirectResponse
+    public function login(LoginRequest $request): RedirectResponse
     {
-        $credentials = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string'],
-        ]);
-
-        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
-            return back()->withErrors([
-                'email' => 'Email atau password salah.',
-            ])->onlyInput('email');
-        }
-
-        $request->session()->regenerate();
+        $request->authenticate();
 
         // Arahkan ke halaman kerja sesuai role.
         return redirect()->intended(match (Auth::user()->role) {
-            'admin' => '/admin',
-            'cashier' => '/cashier',
-            'kitchen' => '/kitchen',
+            UserRole::Admin => '/admin',
+            UserRole::Cashier => '/cashier',
+            UserRole::Kitchen => '/kitchen',
             default => '/',
         });
     }
