@@ -29,7 +29,7 @@ class DiningTableResource extends Resource
                     ->required()
                     ->maxLength(50),
                 Forms\Components\TextInput::make('code')
-                    ->label('Kode (dipakai di URL QR)')
+                    ->label('Kode internal (tidak tampil di URL QR)')
                     ->placeholder('Kosongkan untuk kode otomatis')
                     ->maxLength(20)
                     ->unique(ignoreRecord: true)
@@ -51,6 +51,9 @@ class DiningTableResource extends Resource
                     ->label('Kode')
                     ->searchable()
                     ->copyable(),
+                Tables\Columns\TextColumn::make('qr_expires_at')
+                    ->label('QR berlaku sampai')
+                    ->state(fn (DiningTable $record) => $record->qrExpiresAt()->format('d M Y')),
                 Tables\Columns\TextColumn::make('orders_count')
                     ->label('Order hari ini')
                     ->counts(['orders' => fn ($query) => $query->today()]),
@@ -66,6 +69,15 @@ class DiningTableResource extends Resource
                     ->modalContent(fn (DiningTable $record) => view('filament.table-qr', ['table' => $record]))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Tutup'),
+                Tables\Actions\Action::make('rotateToken')
+                    ->label('Putar token & QR baru')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (DiningTable $record) => 'Putar token — '.$record->name)
+                    ->modalDescription('Token lama langsung tidak berlaku dan QR yang sudah dicetak harus dicetak ulang. Order yang sedang berjalan tidak terganggu.')
+                    ->action(fn (DiningTable $record) => $record->rotateToken())
+                    ->successNotificationTitle(fn (DiningTable $record) => 'Token '.$record->name.' sudah diputar — cetak ulang QR-nya.'),
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([

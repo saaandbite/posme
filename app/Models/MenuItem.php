@@ -52,7 +52,17 @@ class MenuItem extends Model
 
     public function getImageUrlAttribute(): ?string
     {
-        return $this->image ? asset('storage/'.$this->image) : null;
+        if (! $this->image) {
+            return null;
+        }
+
+        // Foto contoh bawaan disimpan langsung di public/images/menu/...
+        if (str_starts_with($this->image, 'images/')) {
+            return asset($this->image);
+        }
+
+        // Foto yang diunggah lewat admin (disk public / storage).
+        return asset('storage/'.$this->image);
     }
 
     /**

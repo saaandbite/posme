@@ -4,6 +4,36 @@
 @source '../../storage/framework/views/*.php';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    /* Tipografi: Fraunces (display serif, hangat, editorial) untuk nama
+       resto & judul; Plus Jakarta Sans untuk teks isi & tombol. */
+    --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
+
+    /* Palet flat ala kafe — satu warna brand (terracotta), tanpa gradient. */
+    --color-cream: #faf4e8; /* dasar halaman */
+    --color-cream-dark: #f0e6d2; /* bidang sekunder */
+    --color-line: #e7dcc8; /* garis pemisah */
+    --color-paper: #fffdf8; /* kartu */
+    --color-espresso: #2b211a; /* teks utama + band gelap */
+    --color-espresso-light: #453423; /* band sekunder */
+    --color-cocoa: #6f6154; /* teks sekunder */
+    --color-brand: #bc4b24; /* SATU warna brand: tombol, harga, aksen */
+    --color-brand-dark: #9a3b1a;
+    --color-brand-soft: #fbeadd;
+    --color-leaf: #2e7d4f; /* lunas / siap */
+    --color-leaf-dark: #236140;
+    --color-leaf-soft: #e2f1e7;
+    --color-butter: #e9b949; /* menunggu / disiapkan */
+    --color-butter-dark: #7a5b00;
+    --color-butter-soft: #fbf3d5;
+    --color-danger: #b3261e;
+    --color-danger-soft: #fbe7e5;
+    /* KDS dapur: gelap tapi hangat (bukan slate dingin). */
+    --color-coal: #201510;
+    --color-coal-card: #2e2015;
+    --color-coal-line: #463425;
+    --color-sand: #eadfcf;
+    --color-sand-dim: #b9a78f;
+    --color-honey: #f0c979; /* catatan di layar gelap */
 }

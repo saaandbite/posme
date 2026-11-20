@@ -11,7 +11,6 @@ use App\Models\Order;
 use App\Models\User;
 use App\Services\MidtransService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\URL;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -47,7 +46,7 @@ class PosFlowTest extends TestCase
 
     protected function signedMenuUrl(DiningTable $table): string
     {
-        return URL::signedRoute('customer.menu', ['table' => $table->code]);
+        return $table->orderUrl();
     }
 
     public function test_customer_dapat_membuat_order_lewat_signed_url(): void
@@ -96,7 +95,15 @@ class PosFlowTest extends TestCase
     {
         $table = DiningTable::first();
 
-        $this->get('/m/'.$table->code)->assertForbidden();
+        $this->get('/m/'.$table->token)->assertForbidden();
+    }
+
+    public function test_url_menu_dengan_kode_meja_lama_tidak_ditemukan(): void
+    {
+        $table = DiningTable::first();
+
+        // Kode meja (MEJA1..) tidak lagi dipakai di URL customer.
+        $this->get('/m/'.$table->code)->assertNotFound();
     }
 
     public function test_customer_tidak_bisa_membuka_halaman_staf(): void

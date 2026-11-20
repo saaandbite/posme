@@ -28,9 +28,10 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('guest');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
 
 // Customer: halaman menu per meja — HANYA lewat signed URL dari QR.
-// Tanpa signature yang valid, Laravel menolak (403) sehingga URL meja
-// lain tidak bisa ditebak.
-Route::get('/m/{table:code}', CustomerMenu::class)
+// URL memakai token acak per meja + signature sementara (kedaluwarsa).
+// Tanpa signature yang valid, Laravel menolak (403); token meja lain
+// tidak bisa ditebak karena acak, bukan pola MEJA1..MEJA6.
+Route::get('/m/{table:token}', CustomerMenu::class)
     ->middleware('signed')
     ->name('customer.menu');
 

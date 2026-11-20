@@ -108,7 +108,11 @@ php artisan serve
   Disajikan (keluar dari board). Order baru berkedip + bunyi beep.
 - Order yang sudah disajikan masuk riwayat (tidak tampil di board aktif).
 
-### Customer (tanpa login, `/m/{kode-meja}?signature=...`)
+### Customer (tanpa login, `/m/{token-acak}?expires=...&signature=...`)
+- URL QR memakai token acak per meja + signature sementara (kedaluwarsa
+  30 hari, bisa diatur lewat `QR_URL_EXPIRY_DAYS`). Token bisa diputar
+  dari admin (Meja & QR Code → "Putar token & QR baru"); URL lama
+  langsung tidak berlaku dan QR harus dicetak ulang.
 - Menu per kategori dengan foto & harga, mobile-first, tombol besar.
 - Item habis tidak bisa dipesan. Keranjang sticky di bawah (session
   per meja, tidak hilang saat refresh).
@@ -241,12 +245,37 @@ sentuh kode.
 3. Pastikan webhook bisa diakses publik (HTTPS) — kalau tidak,
    pembayaran gateway tidak akan terkonfirmasi otomatis dan kasir
    harus menandai lunas manual.
+4. Checklist keamanan sebelum go-live (wajib):
+   - `APP_ENV=production` dan `APP_DEBUG=false` di `.env` (aplikasi
+     juga memaksa debug mati saat `APP_ENV=production`, jadi stack
+     trace tidak pernah bocor ke pengunjung).
+   - `APP_KEY` sudah terisi (`php artisan key:generate` bila kosong).
+   - Ganti password akun demo (admin/kasir/dapur) atau hapus akunnya.
+   - `SESSION_SECURE_COOKIE` aktif — default sudah `true` saat
+     `APP_ENV=production`, supaya cookie sesi tidak terkirim lewat
+     HTTP biasa. Pastikan situs sudah HTTPS.
+   - Pastikan `APP_URL` sudah domain produksi dengan `https://`.
 
 ## Keamanan
 
 - Semua rute staf di balik auth + middleware role (`role:admin`,
   `role:cashier`, `role:kitchen`); Filament panel hanya bisa dibuka
   admin (`User::canAccessPanel()`).
+- Komponen Livewire staf memeriksa role lagi di dalam komponen
+  (`mount()` + tiap aksi sensitif: tandai lunas, terima bayar manual,
+  majukan status, batalkan order) — request Livewire susulan tidak
+  melewati route middleware lagi, jadi pemeriksaan ganda ini yang
+  menahan pemanggilan aksi dari role yang salah.
+- Login staf (`POST /login`) di-throttle: maks. 5 percobaan gagal per
+  menit per email+IP, lalu dikunci sementara. Pesan gagal tetap generik
+  ("Email atau password salah") supaya tidak bocor apakah emailnya
+  terdaftar.
+- Debug dipaksa mati saat `APP_ENV=production`
+  (`AppServiceProvider::boot`), jadi halaman error tidak membocorkan
+  stack trace. Cookie sesi `secure` otomatis aktif di produksi
+  (`config/session.php`), supaya tidak terkirim lewat HTTP biasa.
+- Lacak pesanan customer hanya memuat order milik meja yang sedang
+  dibuka (`dining_table_id` dicocokkan di `CustomerMenu::mount()`).
 - URL menu customer memakai **signed URL** (`URL::signedRoute`) —
   URL tanpa signature ditolak (403).
 - Submit order di-throttle (maks. 5 order / 5 menit per meja + IP)
@@ -270,7 +299,7 @@ sentuh kode.
 
 ```bash
 php artisan test
-# 29 passed (157 assertions)
+# 41 passed (187 assertions)
 ```
 
 Test (`tests/Feature/PosFlowTest.php`, 17 test) mencakup: customer bisa buat
@@ -292,6 +321,15 @@ fallback kasir jalan tanpa error; kredensial database mengalahkan
 `.env` untuk verifikasi signature; webhook Xendit token salah → 403,
 token benar → lunas, EXPIRED → kembali belum bayar; enum status &
 role bekerja.
+
+Test (`tests/Feature/SecurityTest.php`, 12 test) mencakup: login
+gagal 5× lalu dikunci sementara, login benar bisa lagi setelah kunci
+habis, login benar membersihkan hitungan gagal, pesan login gagal tetap
+generik; kitchen tidak bisa membuka komponen kasir (mount maupun aksi
+`markServed`), cashier tidak bisa membuka komponen dapur (mount maupun
+aksi `advanceOrder`), admin bisa membuka keduanya; debug dimatikan saat
+`APP_ENV=production` dan tetap mengikuti config di lokal; order meja
+lain tidak muncul di lacak pesanan meja sendiri.
 
 ## Screenshot
 
@@ -316,8 +354,12 @@ file biner — lihat di repo lokal):
   tidak aktif dan customer diarahkan "Bayar di kasir". Key produksi
   harus diisi Haris sendiri di halaman Pengaturan Gateway
   (lihat bagian "Pembayaran Midtrans Snap & Xendit Invoice").
-- **Foto menu asli** — item menu contoh belum punya foto (foto bisa
-  di-upload dari panel admin, tersimpan di `storage/app/public`).
+- **Foto menu asli** — 12 item contoh kini memakai foto hidangan
+  terverifikasi dari web (`public/images/menu/`, lihat
+  `docs/screenshots/redesign/` untuk daftar sumbernya). Itu foto
+  contoh, bukan foto hidangan asli kafe — ganti dengan foto masakan
+  sendiri sebelum produksi (bisa di-upload dari panel admin,
+  tersimpan di `storage/app/public`).
 - **Domain & HTTPS** — webhook Midtrans produksi butuh URL publik
   HTTPS; QR meja berisi URL `APP_URL`, jadi ganti `APP_URL` di `.env`
   setelah deploy.

@@ -19,6 +19,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Produksi: jangan pernah bocorkan stack trace / detail error ke
+        // pengunjung, apa pun isi .env di server. Di lokal (APP_ENV=local)
+        // debug tetap mengikuti APP_DEBUG seperti biasa.
+        if ($this->app->environment('production')) {
+            config(['app.debug' => false]);
+        }
     }
 }

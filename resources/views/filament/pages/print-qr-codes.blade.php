@@ -19,6 +19,7 @@
                 </div>
                 <p class="mt-3 text-xl font-bold">{{ $table->name }}</p>
                 <p class="text-sm text-gray-500">Scan untuk pesan</p>
+                <p class="mt-1 text-xs text-gray-400">QR berlaku sampai {{ $table->qrExpiresAt()->format('d M Y') }}</p>
                 <p class="mt-1 text-xs text-gray-400">{{ \App\Models\Setting::current()->restaurant_name }}</p>
             </div>
         @endforeach

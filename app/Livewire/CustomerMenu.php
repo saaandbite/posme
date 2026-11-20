@@ -45,10 +45,12 @@ class CustomerMenu extends Component
         $this->activeGateway = PaymentGateway::usable();
 
         // Lanjutkan lacak pesanan yang masih aktif di meja ini.
+        // Order harus milik meja yang sedang dibuka — order meja lain
+        // (mis. session tertukar) diabaikan, tidak ditampilkan.
         $orderId = session()->get('posme.order.'.$table->code);
         if ($orderId) {
             $order = Order::with('items')->find($orderId);
-            if ($order && $order->status !== OrderStatus::Cancelled) {
+            if ($order && $order->status !== OrderStatus::Cancelled && $order->dining_table_id === $table->id) {
                 $this->order = $order;
             }
         }

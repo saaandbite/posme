@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
+use App\Enums\UserRole;
 use App\Models\Order;
 use App\Models\Setting;
 use Livewire\Attributes\Computed;
@@ -36,6 +37,25 @@ class CashierTerminal extends Component
 
     public ?int $lastPaidOrderId = null;
 
+    /**
+     * Pertahanan berlapis: route sudah dibatasi middleware role, tapi
+     * request Livewire berikutnya tidak melewati mount ulang — jadi role
+     * diperiksa lagi di sini dan di tiap aksi sensitif.
+     */
+    public function mount(): void
+    {
+        $this->authorizeCashier();
+    }
+
+    protected function authorizeCashier(): void
+    {
+        $user = auth()->user();
+
+        if (! $user || ! in_array($user->role, [UserRole::Cashier, UserRole::Admin], true)) {
+            abort(403, 'Anda tidak memiliki akses ke halaman kasir.');
+        }
+    }
+
     public function selectOrder(int $orderId): void
     {
         $this->selectedOrderId = $orderId;
@@ -49,6 +69,8 @@ class CashierTerminal extends Component
     /** Kasir/waiter menandai order sudah diantar ke meja. */
     public function markServed(int $orderId): void
     {
+        $this->authorizeCashier();
+
         $order = Order::find($orderId);
         if (! $order || $order->status !== OrderStatus::Ready) {
             return;
@@ -94,6 +116,8 @@ class CashierTerminal extends Component
 
     public function confirmPayment(): void
     {
+        $this->authorizeCashier();
+
         $order = $this->selectedOrder;
 
         if (! $order || ! $order->canBePaid()) {
@@ -135,6 +159,8 @@ class CashierTerminal extends Component
 
     public function cancelOrder(): void
     {
+        $this->authorizeCashier();
+
         $order = $this->selectedOrder;
 
         if (! $order || ! $order->canBeCancelled()) {

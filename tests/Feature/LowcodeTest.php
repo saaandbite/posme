@@ -18,7 +18,6 @@ use App\Services\MidtransService;
 use App\Services\PaymentGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\URL;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -42,7 +41,7 @@ class LowcodeTest extends TestCase
 
     protected function signedMenuUrl(DiningTable $table): string
     {
-        return URL::signedRoute('customer.menu', ['table' => $table->code]);
+        return $table->orderUrl();
     }
 
     /** Buat order lewat Livewire customer-menu, kembalikan modelnya. */
@@ -195,20 +194,22 @@ class LowcodeTest extends TestCase
             'is_available' => true,
         ]);
 
-        // Default layout grid.
+        // Default layout grid: editorial — satu menu andalan besar di atas,
+        // sisanya baris daftar; tidak ada lagi grid 2 kolom yang seragam.
         $this->get($this->signedMenuUrl($table))
             ->assertOk()
             ->assertSee('Best Seller')
-            ->assertSee('grid grid-cols-2 gap-3', false);
+            ->assertSee('Andalan kami')
+            ->assertDontSee('grid grid-cols-2 gap-3', false);
 
-        // Ganti ke list.
+        // Ganti ke list: tanpa menu andalan, semua jadi baris daftar.
         Setting::current()->update(['menu_layout' => 'list']);
         Setting::flush();
 
         $this->get($this->signedMenuUrl($table))
             ->assertOk()
             ->assertSee('Best Seller')
-            ->assertSee('class="space-y-3"', false)
+            ->assertDontSee('Andalan kami')
             ->assertDontSee('grid grid-cols-2 gap-3', false);
     }
 

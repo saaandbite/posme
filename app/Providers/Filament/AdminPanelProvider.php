@@ -32,8 +32,13 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->brandName('Posme')
+            ->font('Plus Jakarta Sans')
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::hex('#BC4B24'),
+                'danger' => Color::hex('#B3261E'),
+                'success' => Color::hex('#2E7D4F'),
+                'warning' => Color::hex('#E9B949'),
+                'info' => Color::hex('#2B211A'),
             ])
             ->navigationGroups([
                 NavigationGroup::make()->label('Menu'),
